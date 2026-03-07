@@ -1,0 +1,93 @@
+name: Build Xray for OpenWrt 25.12.0 (AX3000T)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'ax3000t-*'
+
+env:
+  OPENWRT_VERSION: 25.12.0
+  OPENWRT_TARGET: mediatek
+  OPENWRT_SUBTARGET: filogic
+  PACKAGE_DIR_NAME: xray-core
+  PACKAGE_NAME: openwrt-xray
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ccache gettext libncurses5-dev xsltproc zstd
+
+      - name: Prepare OpenWrt SDK
+        env:
+          SDK_BASE_URL: https://downloads.openwrt.org/releases/${{ env.OPENWRT_VERSION }}/targets/${{ env.OPENWRT_TARGET }}/${{ env.OPENWRT_SUBTARGET }}
+          SDK_NAME_PATTERN: -sdk-${{ env.OPENWRT_VERSION }}-${{ env.OPENWRT_TARGET }}-${{ env.OPENWRT_SUBTARGET }}_
+        run: |
+          set -euxo pipefail
+          mkdir -p "$HOME/sdk-cache"
+          cd "$HOME/sdk-cache"
+          wget -q -O sha256sums "$SDK_BASE_URL/sha256sums"
+          SDK_FILE="$(grep -- "$SDK_NAME_PATTERN" sha256sums | awk '{print $2}' | sed 's#\*##g' | head -n1)"
+          [ -n "$SDK_FILE" ]
+          if [ ! -f "$SDK_FILE" ]; then
+            wget -q "$SDK_BASE_URL/$SDK_FILE"
+          fi
+          grep -- "$SDK_FILE" sha256sums > sha256sums.sdk
+          sha256sum -c sha256sums.sdk
+          mkdir -p "$HOME/openwrt-sdk"
+          tar -Jxf "$SDK_FILE" -C "$HOME/openwrt-sdk" --strip=1
+
+      - name: Update feeds and inject package
+        env:
+          OPENWRT_GOLANG_COMMIT: ${{ secrets.OPENWRT_GOLANG_COMMIT }}
+        run: |
+          set -euxo pipefail
+          cd "$HOME/openwrt-sdk"
+          cp feeds.conf.default feeds.conf
+          sed -i 's#git.openwrt.org/openwrt/openwrt#github.com/openwrt/openwrt#' feeds.conf
+          sed -i 's#git.openwrt.org/feed/packages#github.com/openwrt/packages#' feeds.conf
+          sed -i 's#git.openwrt.org/project/luci#github.com/openwrt/luci#' feeds.conf
+          sed -i 's#git.openwrt.org/feed/telephony#github.com/openwrt/telephony#' feeds.conf
+          ./scripts/feeds update -a
+          rm -rf "feeds/packages/net/${PACKAGE_DIR_NAME}" || true
+          rm -rf "feeds/packages/lang/golang" || true
+          curl -fsSL "https://codeload.github.com/openwrt/packages/tar.gz/${OPENWRT_GOLANG_COMMIT:-master}" | tar -xz -C "feeds/packages/lang" --strip=2 "packages-${OPENWRT_GOLANG_COMMIT:-master}/lang/golang"
+          ln -s "${GITHUB_WORKSPACE}" "package/${PACKAGE_DIR_NAME}"
+          ./scripts/feeds install -a
+
+      - name: Build package
+        run: |
+          set -euxo pipefail
+          cd "$HOME/openwrt-sdk"
+          make defconfig
+          make "package/${PACKAGE_DIR_NAME}/clean"
+          make "package/${PACKAGE_DIR_NAME}/compile" V=s
+
+      - name: Collect packages
+        run: |
+          set -euxo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          find "$HOME/openwrt-sdk/bin/packages/" -type f -name "*${PACKAGE_NAME}*.apk" -exec cp -v {} "$GITHUB_WORKSPACE/dist/" \;
+          ls -lh "$GITHUB_WORKSPACE/dist"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-${{ env.OPENWRT_VERSION }}-${{ env.OPENWRT_TARGET }}-${{ env.OPENWRT_SUBTARGET }}-${{ env.PACKAGE_NAME }}
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Create release on tag
+        if: startsWith(github.ref, 'refs/tags/ax3000t-')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
