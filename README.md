@@ -1,6 +1,6 @@
 # Xray for OpenWrt
 
-Just the binary file for various platforms, without cgo or any init scripts.
+APK package of Xray-core for Xiaomi AX3000T (mediatek/filogic), without cgo or any init scripts.
 
 For geoip.dat & geosite.dat try
 
@@ -12,12 +12,28 @@ For LuCI support try [yichya/luci-app-xray](https://github.com/yichya/luci-app-x
 
 ## Build APK for Xiaomi AX3000T (mediatek/filogic)
 
-GitHub Actions workflow:
+GitHub Actions workflow: `.github/workflows/build-openwrt-apk.yml`
 
-* `.github/workflows/build-openwrt-apk.yml`
+### Release a new Xray-core version
 
-How to run:
+1. Get the source tarball hash:
 
-1. Open **Actions** tab and run `Build Xray APK for OpenWrt (AX3000T)` manually (`workflow_dispatch`).
-2. Download built `.apk` from workflow artifacts.
-3. To auto-publish `.apk` to a GitHub Release, push a version tag (e.g. `v26.2.6`).
+   ```bash
+   wget -qO- "https://codeload.github.com/XTLS/Xray-core/tar.gz/v<VERSION>" | sha256sum
+   ```
+
+2. Update `PKG_VERSION` and `PKG_HASH` in `Makefile`.
+3. Commit and push a tag:
+
+   ```bash
+   git add Makefile
+   git commit -m "tag v<VERSION>"
+   git tag v<VERSION>
+   git push origin master v<VERSION>
+   ```
+
+The workflow triggers on any tag push, builds the `.apk`, and publishes it to a GitHub Release.
+
+### Manual run
+
+Open **Actions** tab and run `Build Xray APK for OpenWrt (AX3000T)` via `workflow_dispatch`.
