@@ -10,14 +10,14 @@ For geoip.dat & geosite.dat try
 
 For LuCI support try [yichya/luci-app-xray](https://github.com/yichya/luci-app-xray)
 
-## Build for Xiaomi AX3000T (mediatek/filogic, OpenWrt 25.12.0)
+## Build APK for Xiaomi AX3000T (mediatek/filogic)
 
 GitHub Actions workflow:
 
-* `.github/workflows/build-openwrt-25.12.0-ax3000t.yml`
+* `.github/workflows/build-openwrt-apk.yml`
 
-How to run on GitHub servers:
+How to run:
 
-1. Open **Actions** tab and run `Build Xray for OpenWrt 25.12.0 (AX3000T)` manually (`workflow_dispatch`).
+1. Open **Actions** tab and run `Build Xray APK for OpenWrt (AX3000T)` manually (`workflow_dispatch`).
 2. Download built `.apk` from workflow artifacts.
-3. To auto-publish `.apk` to a GitHub Release, push a tag like `ax3000t-2026-03-07`.
+3. To auto-publish `.apk` to a GitHub Release, push a version tag (e.g. `v26.2.6`).
